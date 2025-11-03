@@ -1,0 +1,389 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+new file mode 120000
+index 0000000..b900d91
+--- /dev/null
++++ b/CMakeLists.txt
+@@ -0,0 +1 @@
++/home/ardyseto/miniconda3/envs/ros_env/share/catkin/cmake/toplevel.cmake
+\ No newline at end of file
+diff --git a/README.md b/README.md
+index b99857c..b5f7cea 100644
+--- a/README.md
++++ b/README.md
+@@ -41,16 +41,38 @@ ROS Kinetic or Melodic. [ROS Installation](http://wiki.ros.org/ROS/Installation)
+ ### 1.2. **Ceres Solver**
+ Follow [Ceres Installation](http://ceres-solver.org/installation.html).
+ 
++### 1.3 **Ubuntu 22.04 + RoboStack (tested setup)**
++This fork has been validated on Ubuntu 22.04 using the RoboStack ROS Noetic distribution inside a conda environment. See `ROBOSTACK-INSTALLATION.md` for the full installation walkthrough.
++
++**Repository adjustments for this platform**
++- CMake minimum policy bumped to 3.5 via the build command (`catkin_make -DCMAKE_POLICY_VERSION_MINIMUM=3.5`) to match CMake 4.1 shipped by RoboStack.
++- All catkin packages compile with `-std=c++14` to satisfy the current Ceres headers.
++- OpenCV 4.11 C-API compatibility headers are included wherever legacy `CV_*` macros are used.
++- `FindSuiteSparse.cmake` from the Ceres package has an additional fallback so SuiteSparse 7.x from conda-forge is accepted.
++- The repository-level `CMakeLists.txt` should be copied (or symlinked) from `$CONDA_PREFIX/share/catkin/cmake/toplevel.cmake` before building.
++
+ 
+ ## 2. Build VINS-Fusion
+-Clone the repository and catkin_make:
++Clone the repository, place it in your catkin workspace, and copy the RoboStack toplevel CMake entry point into this directory (the `CONDA_PREFIX` environment variable is set automatically after you activate the RoboStack environment):
+ ```
+     cd ~/catkin_ws/src
+     git clone https://github.com/HKUST-Aerial-Robotics/VINS-Fusion.git
+-    cd ../
+-    catkin_make
++    cd VINS-Fusion
++    cp $CONDA_PREFIX/share/catkin/cmake/toplevel.cmake CMakeLists.txt
++    cd ..
++    catkin_make -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+     source ~/catkin_ws/devel/setup.bash
+ ```
++(Workspace layout snapshot after these steps)
++```
++~/catkin_ws/
++  src/
++    VINS-Fusion/
++      CMakeLists.txt        # copied from $CONDA_PREFIX/share/catkin/cmake/toplevel.cmake
++      camera_models/
++      global_fusion/
++      ...
++```
+ (if you fail in this step, try to find another computer with clean system or reinstall Ubuntu and ROS)
+ 
+ ## 3. EuRoC Example
+@@ -58,7 +80,9 @@ Download [EuRoC MAV Dataset](http://projects.asl.ethz.ch/datasets/doku.php?id=km
+ Open four terminals, run vins odometry, visual loop closure(optional), rviz and play the bag file respectively. 
+ Green path is VIO odometry; red path is odometry under visual loop closure.
+ 
+-### 3.1 Monocualr camera + IMU
++### 3.1 Monocular camera + IMU
++
++Quick-start instructions for the EuRoC monocular + IMU demo are documented in `RUN-TUTORIAL.md`.
+ 
+ ```
+     roslaunch vins vins_rviz.launch
+diff --git a/ROBOSTACK-INSTALLATION.md b/ROBOSTACK-INSTALLATION.md
+new file mode 100644
+index 0000000..481176c
+--- /dev/null
++++ b/ROBOSTACK-INSTALLATION.md
+@@ -0,0 +1,64 @@
++# Install VINS-Fusion with RoboStack (ROS Noetic)
++
++This document explains how to deploy VINS-Fusion on Ubuntu 22.04 using RoboStack ROS 1 (Noetic) on conda.
++
++## 1. Create and Prepare the Environment
++```bash
++conda create -n ros_env -c conda-forge -c robostack-noetic ros-noetic-desktop
++conda activate ros_env
++conda install -c conda-forge compilers cmake pkg-config make ninja colcon-common-extensions catkin_tools rosdep
++```
++
++> After activation, run once:
++> ```bash
++> rosdep init    # only if this machine has never run rosdep before
++> rosdep update
++> ```
++
++## 2. Create the ROS Workspace
++```bash
++mkdir -p ~/catkin_ws/src
++cd ~/catkin_ws/src
++git clone https://github.com/HKUST-Aerial-Robotics/VINS-Fusion.git
++cd ..
++```
++
++## 3. Build with catkin_make
++RoboStack ships CMake 4.1 (compatibility for <3.5 removed) and OpenCV 4.11 (legacy C-API macros disabled). The repository has been patched to work in this environment:
++
++- all packages now compile with C++14 (`-std=c++14`)
++- OpenCV C-API compatibility headers are included wherever `CV_*` macros are still used
++- the Ceres `FindSuiteSparse.cmake` script accepts SuiteSparse v7.x from conda-forge
++- the workspace toplevel `CMakeLists.txt` should be copied (or symlinked) from `$CONDA_PREFIX/share/catkin/cmake/toplevel.cmake`
++
++Prepare the catkin entry point and build:
++```bash
++cd ~/catkin_ws/src/VINS-Fusion
++cp $CONDA_PREFIX/share/catkin/cmake/toplevel.cmake CMakeLists.txt
++cd ..
++catkin_make -DCMAKE_POLICY_VERSION_MINIMUM=3.5
++```
++
++> For a clean rebuild:
++> ```bash
++> rm -rf build devel
++> catkin_make -DCMAKE_POLICY_VERSION_MINIMUM=3.5
++> ```
++
++## 4. Verify roscore and RViz
++Use two terminals, each with `conda activate ros_env`:
++
++**Terminal 1**
++```bash
++roscore
++```
++
++**Terminal 2**
++```bash
++rviz
++```
++
++## 5. Compatibility Notes
++- The conda packages `ceres-solver` 2.1.0 and SuiteSparse 7.10 work with the patches in this repo; adjust `FindSuiteSparse.cmake` if you use another version.
++- Always run ROS commands inside the `ros_env` environment so RoboStack dependencies are visible.
++- For EuRoC monocular + IMU execution instructions, see `Run-Tutorial.md`.
+diff --git a/RUN-TUTORIAL.md b/RUN-TUTORIAL.md
+new file mode 100644
+index 0000000..d5e5d32
+--- /dev/null
++++ b/RUN-TUTORIAL.md
+@@ -0,0 +1,33 @@
++# VINS-Fusion Monocular + IMU Quick Start
++
++Follow the terminal order below to run the EuRoC dataset (`MH_01_easy.bag`). Activate the same ROS environment in every shell.
++
++## Terminal 1 – RViz
++```bash
++cd ~/catkin_ws
++source devel/setup.bash
++roslaunch vins vins_rviz.launch
++```
++Keep RViz open to visualize the estimator output.
++
++## Terminal 2 – Main VINS Node
++```bash
++cd ~/catkin_ws
++source devel/setup.bash
++rosrun vins vins_node ~/catkin_ws/src/VINS-Fusion/config/euroc/euroc_mono_imu_config.yaml
++```
++This starts the monocular + IMU estimator.
++
++## Terminal 3 – Loop Fusion (optional)
++```bash
++cd ~/catkin_ws
++source devel/setup.bash
++rosrun loop_fusion loop_fusion_node ~/catkin_ws/src/VINS-Fusion/config/euroc/euroc_mono_imu_config.yaml
++```
++Launch only if you need loop-closure.
++
++## Terminal 4 – Play the Dataset
++```bash
++rosbag play /home/ardyseto/Downloads/MH_01_easy.bag
++```
++Stream the EuRoC bag that contains monocular and IMU data.
+diff --git a/camera_models/CMakeLists.txt b/camera_models/CMakeLists.txt
+index 3b61190..934a8db 100644
+--- a/camera_models/CMakeLists.txt
++++ b/camera_models/CMakeLists.txt
+@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
+ project(camera_models)
+ 
+ set(CMAKE_BUILD_TYPE "Release")
+-set(CMAKE_CXX_FLAGS "-std=c++11")
++set(CMAKE_CXX_FLAGS "-std=c++14")
+ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -fPIC")
+ 
+ find_package(catkin REQUIRED COMPONENTS
+diff --git a/camera_models/src/calib/CameraCalibration.cc b/camera_models/src/calib/CameraCalibration.cc
+index 10543e9..94f3ede 100644
+--- a/camera_models/src/calib/CameraCalibration.cc
++++ b/camera_models/src/calib/CameraCalibration.cc
+@@ -9,7 +9,10 @@
+ #include <opencv2/core/core.hpp>
+ #include <opencv2/core/eigen.hpp>
+ #include <opencv2/imgproc/imgproc.hpp>
++#include <opencv2/imgproc/imgproc_c.h>
++#include <opencv2/imgproc/types_c.h>
+ #include <opencv2/calib3d/calib3d.hpp>
++#include <opencv2/calib3d/calib3d_c.h>
+ 
+ #include "camodocal/camera_models/CameraFactory.h"
+ #include "camodocal/sparse_graph/Transform.h"
+diff --git a/camera_models/src/chessboard/Chessboard.cc b/camera_models/src/chessboard/Chessboard.cc
+index 4c0a761..4cad567 100644
+--- a/camera_models/src/chessboard/Chessboard.cc
++++ b/camera_models/src/chessboard/Chessboard.cc
+@@ -1,7 +1,10 @@
+ #include "camodocal/chessboard/Chessboard.h"
+ 
+ #include <opencv2/calib3d/calib3d.hpp>
++#include <opencv2/calib3d/calib3d_c.h>
+ #include <opencv2/imgproc/imgproc.hpp>
++#include <opencv2/imgproc/imgproc_c.h>
++#include <opencv2/imgproc/types_c.h>
+ 
+ #include "camodocal/chessboard/ChessboardQuad.h"
+ #include "camodocal/chessboard/Spline.h"
+diff --git a/camera_models/src/intrinsic_calib.cc b/camera_models/src/intrinsic_calib.cc
+index 7590a64..a0798f5 100644
+--- a/camera_models/src/intrinsic_calib.cc
++++ b/camera_models/src/intrinsic_calib.cc
+@@ -7,6 +7,8 @@
+ #include <opencv2/core/core.hpp>
+ #include <opencv2/highgui/highgui.hpp>
+ #include <opencv2/imgproc/imgproc.hpp>
++#include <opencv2/imgproc/imgproc_c.h>
++#include <opencv2/imgproc/types_c.h>
+ 
+ #include "camodocal/calib/CameraCalibration.h"
+ #include "camodocal/chessboard/Chessboard.h"
+diff --git a/global_fusion/CMakeLists.txt b/global_fusion/CMakeLists.txt
+index 2016261..5ff032d 100644
+--- a/global_fusion/CMakeLists.txt
++++ b/global_fusion/CMakeLists.txt
+@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
+ project(global_fusion)
+ 
+ set(CMAKE_BUILD_TYPE "Release")
+-set(CMAKE_CXX_FLAGS "-std=c++11")
++set(CMAKE_CXX_FLAGS "-std=c++14")
+ #-DEIGEN_USE_MKL_ALL")
+ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g")
+ 
+@@ -30,4 +30,4 @@ add_executable(global_fusion_node
+ 	src/globalOptNode.cpp
+ 	src/globalOpt.cpp)
+ 
+-target_link_libraries(global_fusion_node ${catkin_LIBRARIES} ${CERES_LIBRARIES} libGeographiccc) 
+\ No newline at end of file
++target_link_libraries(global_fusion_node ${catkin_LIBRARIES} ${CERES_LIBRARIES} libGeographiccc) 
+diff --git a/loop_fusion/CMakeLists.txt b/loop_fusion/CMakeLists.txt
+index 29568f0..6745e40 100644
+--- a/loop_fusion/CMakeLists.txt
++++ b/loop_fusion/CMakeLists.txt
+@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
+ project(loop_fusion)
+ 
+ set(CMAKE_BUILD_TYPE "Release")
+-set(CMAKE_CXX_FLAGS "-std=c++11")
++set(CMAKE_CXX_FLAGS "-std=c++14")
+ #-DEIGEN_USE_MKL_ALL")
+ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g")
+ 
+diff --git a/loop_fusion/src/ThirdParty/DVision/BRIEF.cpp b/loop_fusion/src/ThirdParty/DVision/BRIEF.cpp
+index 6af73c4..ab36cf1 100644
+--- a/loop_fusion/src/ThirdParty/DVision/BRIEF.cpp
++++ b/loop_fusion/src/ThirdParty/DVision/BRIEF.cpp
+@@ -12,6 +12,9 @@
+ 
+ #include "BRIEF.h"
+ #include "../DUtils/DUtils.h"
++#include <opencv2/imgproc/imgproc_c.h>
++#include <opencv2/imgproc/types_c.h>
++#include <opencv2/imgcodecs/legacy/constants_c.h>
+ #include <boost/dynamic_bitset.hpp>
+ #include <vector>
+ 
+@@ -171,4 +174,3 @@ void BRIEF::generateTestPoints()
+ 
+ // ----------------------------------------------------------------------------
+ 
+-
+diff --git a/loop_fusion/src/keyframe.cpp b/loop_fusion/src/keyframe.cpp
+index 862b795..18cf5e6 100644
+--- a/loop_fusion/src/keyframe.cpp
++++ b/loop_fusion/src/keyframe.cpp
+@@ -10,6 +10,9 @@
+  *******************************************************/
+ 
+ #include "keyframe.h"
++#include <opencv2/imgproc/imgproc_c.h>
++#include <opencv2/imgproc/types_c.h>
++#include <opencv2/imgcodecs/legacy/constants_c.h>
+ 
+ template <typename Derived>
+ static void reduceVector(vector<Derived> &v, vector<uchar> status)
+@@ -583,4 +586,3 @@ BriefExtractor::BriefExtractor(const std::string &pattern_file)
+   m_brief.importPairs(x1, y1, x2, y2);
+ }
+ 
+-
+diff --git a/loop_fusion/src/pose_graph.cpp b/loop_fusion/src/pose_graph.cpp
+index b5436fd..937adc5 100644
+--- a/loop_fusion/src/pose_graph.cpp
++++ b/loop_fusion/src/pose_graph.cpp
+@@ -10,6 +10,9 @@
+  *******************************************************/
+ 
+ #include "pose_graph.h"
++#include <opencv2/imgproc/imgproc_c.h>
++#include <opencv2/imgproc/types_c.h>
++#include <opencv2/imgcodecs/legacy/constants_c.h>
+ 
+ PoseGraph::PoseGraph()
+ {
+diff --git a/loop_fusion/src/pose_graph.h b/loop_fusion/src/pose_graph.h
+index ba73a11..fdc59c1 100644
+--- a/loop_fusion/src/pose_graph.h
++++ b/loop_fusion/src/pose_graph.h
+@@ -14,6 +14,9 @@
+ #include <thread>
+ #include <mutex>
+ #include <opencv2/opencv.hpp>
++#include <opencv2/imgproc/imgproc_c.h>
++#include <opencv2/imgproc/types_c.h>
++#include <opencv2/imgcodecs/legacy/constants_c.h>
+ #include <eigen3/Eigen/Dense>
+ #include <string>
+ #include <ceres/ceres.h>
+@@ -331,4 +334,4 @@ struct RelativeRTError
+ 	double q_w, q_x, q_y, q_z;
+ 	double t_var, q_var;
+ 
+-};
+\ No newline at end of file
++};
+diff --git a/vins_estimator/CMakeLists.txt b/vins_estimator/CMakeLists.txt
+index 5daf0ee..0e716fa 100644
+--- a/vins_estimator/CMakeLists.txt
++++ b/vins_estimator/CMakeLists.txt
+@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
+ project(vins)
+ 
+ set(CMAKE_BUILD_TYPE "Release")
+-set(CMAKE_CXX_FLAGS "-std=c++11")
++set(CMAKE_CXX_FLAGS "-std=c++14")
+ #-DEIGEN_USE_MKL_ALL")
+ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g")
+ 
+@@ -61,4 +61,3 @@ target_link_libraries(kitti_odom_test vins_lib)
+ 
+ add_executable(kitti_gps_test src/KITTIGPSTest.cpp)
+ target_link_libraries(kitti_gps_test vins_lib) 
+-
+diff --git a/vins_estimator/src/featureTracker/feature_tracker.cpp b/vins_estimator/src/featureTracker/feature_tracker.cpp
+index eb69c88..e4be471 100644
+--- a/vins_estimator/src/featureTracker/feature_tracker.cpp
++++ b/vins_estimator/src/featureTracker/feature_tracker.cpp
+@@ -10,6 +10,9 @@
+  *******************************************************/
+ 
+ #include "feature_tracker.h"
++#include <opencv2/imgproc/imgproc_c.h>
++#include <opencv2/imgproc/types_c.h>
++#include <opencv2/imgcodecs/legacy/constants_c.h>
+ 
+ bool FeatureTracker::inBorder(const cv::Point2f &pt)
+ {
+@@ -543,4 +546,4 @@ void FeatureTracker::removeOutliers(set<int> &removePtsIds)
+ cv::Mat FeatureTracker::getTrackImage()
+ {
+     return imTrack;
+-}
+\ No newline at end of file
++}
+diff --git a/vins_estimator/src/featureTracker/feature_tracker.h b/vins_estimator/src/featureTracker/feature_tracker.h
+index 00bfffa..71975ce 100644
+--- a/vins_estimator/src/featureTracker/feature_tracker.h
++++ b/vins_estimator/src/featureTracker/feature_tracker.h
+@@ -17,6 +17,9 @@
+ #include <execinfo.h>
+ #include <csignal>
+ #include <opencv2/opencv.hpp>
++#include <opencv2/imgproc/imgproc_c.h>
++#include <opencv2/imgproc/types_c.h>
++#include <opencv2/imgcodecs/legacy/constants_c.h>
+ #include <eigen3/Eigen/Dense>
+ 
+ #include "camodocal/camera_models/CameraFactory.h"

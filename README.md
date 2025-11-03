@@ -41,15 +41,37 @@ ROS Kinetic or Melodic. [ROS Installation](http://wiki.ros.org/ROS/Installation)
 ### 1.2. **Ceres Solver**
 Follow [Ceres Installation](http://ceres-solver.org/installation.html).
 
+### 1.3 **Ubuntu 22.04 + RoboStack (tested setup)**
+This fork has been validated on Ubuntu 22.04 using the RoboStack ROS Noetic distribution inside a conda environment. See `ROBOSTACK-INSTALLATION.md` for the full installation walkthrough.
+
+**Repository adjustments for this platform**
+- CMake minimum policy bumped to 3.5 via the build command (`catkin_make -DCMAKE_POLICY_VERSION_MINIMUM=3.5`) to match CMake 4.1 shipped by RoboStack.
+- All catkin packages compile with `-std=c++14` to satisfy the current Ceres headers.
+- OpenCV 4.11 C-API compatibility headers are included wherever legacy `CV_*` macros are used.
+- `FindSuiteSparse.cmake` from the Ceres package has an additional fallback so SuiteSparse 7.x from conda-forge is accepted.
+- The repository-level `CMakeLists.txt` should be copied (or symlinked) from `$CONDA_PREFIX/share/catkin/cmake/toplevel.cmake` before building.
+
 
 ## 2. Build VINS-Fusion
-Clone the repository and catkin_make:
+Clone the repository, place it in your catkin workspace, and copy the RoboStack toplevel CMake entry point into this directory (the `CONDA_PREFIX` environment variable is set automatically after you activate the RoboStack environment):
 ```
     cd ~/catkin_ws/src
     git clone https://github.com/HKUST-Aerial-Robotics/VINS-Fusion.git
-    cd ../
-    catkin_make
+    cd VINS-Fusion
+    cp $CONDA_PREFIX/share/catkin/cmake/toplevel.cmake CMakeLists.txt
+    cd ..
+    catkin_make -DCMAKE_POLICY_VERSION_MINIMUM=3.5
     source ~/catkin_ws/devel/setup.bash
+```
+(Workspace layout snapshot after these steps)
+```
+~/catkin_ws/
+  src/
+    VINS-Fusion/
+      CMakeLists.txt        # copied from $CONDA_PREFIX/share/catkin/cmake/toplevel.cmake
+      camera_models/
+      global_fusion/
+      ...
 ```
 (if you fail in this step, try to find another computer with clean system or reinstall Ubuntu and ROS)
 
@@ -58,7 +80,9 @@ Download [EuRoC MAV Dataset](http://projects.asl.ethz.ch/datasets/doku.php?id=km
 Open four terminals, run vins odometry, visual loop closure(optional), rviz and play the bag file respectively. 
 Green path is VIO odometry; red path is odometry under visual loop closure.
 
-### 3.1 Monocualr camera + IMU
+### 3.1 Monocular camera + IMU
+
+Quick-start instructions for the EuRoC monocular + IMU demo are documented in `RUN-TUTORIAL.md`.
 
 ```
     roslaunch vins vins_rviz.launch

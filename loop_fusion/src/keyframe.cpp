@@ -10,6 +10,9 @@
  *******************************************************/
 
 #include "keyframe.h"
+#include <opencv2/imgproc/imgproc_c.h>
+#include <opencv2/imgproc/types_c.h>
+#include <opencv2/imgcodecs/legacy/constants_c.h>
 
 template <typename Derived>
 static void reduceVector(vector<Derived> &v, vector<uchar> status)
@@ -582,5 +585,4 @@ BriefExtractor::BriefExtractor(const std::string &pattern_file)
 
   m_brief.importPairs(x1, y1, x2, y2);
 }
-
 
